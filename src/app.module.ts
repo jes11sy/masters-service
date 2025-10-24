@@ -4,6 +4,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { MastersModule } from './masters/masters.module';
 import { MasterHandoverController } from './master-handover/master-handover.controller';
+import { MastersService } from './masters/masters.service';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { MasterHandoverController } from './master-handover/master-handover.cont
     MastersModule,
   ],
   controllers: [MasterHandoverController],
+  providers: [MastersService],
 })
 export class AppModule {}
 
