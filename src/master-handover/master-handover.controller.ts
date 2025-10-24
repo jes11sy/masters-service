@@ -5,7 +5,7 @@ import { RolesGuard, Roles, UserRole } from '../auth/roles.guard';
 import { MastersService } from '../masters/masters.service';
 
 @ApiTags('Master Handover')
-@Controller('api/v1/master-handover')
+@Controller('master-handover')
 export class MasterHandoverController {
   constructor(private readonly mastersService: MastersService) {}
 
