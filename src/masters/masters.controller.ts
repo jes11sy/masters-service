@@ -110,5 +110,23 @@ export class MastersController {
   ) {
     return this.mastersService.updateStatus(+id, body.status);
   }
+
+  @Get('handover/summary')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.DIRECTOR, UserRole.CALLCENTRE_ADMIN)
+  @ApiOperation({ summary: 'Get master handover summary' })
+  async getHandoverSummary() {
+    return this.mastersService.getHandoverSummary();
+  }
+
+  @Get('handover/:id')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.DIRECTOR, UserRole.CALLCENTRE_ADMIN)
+  @ApiOperation({ summary: 'Get master handover details' })
+  async getHandoverDetails(@Param('id') id: string) {
+    return this.mastersService.getHandoverDetails(+id);
+  }
 }
 

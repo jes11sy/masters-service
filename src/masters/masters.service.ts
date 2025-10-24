@@ -310,5 +310,89 @@ export class MastersService {
       },
     };
   }
+
+  async getHandoverSummary() {
+    // Получаем всех мастеров с их заказами
+    const masters = await this.prisma.master.findMany({
+      select: {
+        id: true,
+        name: true,
+        cities: true,
+        orders: {
+          where: {
+            status: 'completed',
+            // Добавляем фильтр по дате, если нужно
+          },
+          select: {
+            id: true,
+            totalClean: true,
+            dateCreate: true,
+          },
+        },
+      },
+    });
+
+    // Группируем данные по мастерам
+    const mastersData = masters.map(master => {
+      const totalAmount = master.orders.reduce((sum, order) => sum + (order.totalClean || 0), 0);
+      return {
+        id: master.id,
+        name: master.name,
+        cities: master.cities,
+        totalAmount,
+        ordersCount: master.orders.length,
+      };
+    });
+
+    const totalAmount = mastersData.reduce((sum, master) => sum + master.totalAmount, 0);
+
+    return {
+      success: true,
+      data: {
+        masters: mastersData,
+        totalAmount,
+      },
+    };
+  }
+
+  async getHandoverDetails(masterId: number) {
+    const master = await this.prisma.master.findUnique({
+      where: { id: masterId },
+      select: {
+        id: true,
+        name: true,
+        cities: true,
+        orders: {
+          where: {
+            status: 'completed',
+          },
+          select: {
+            id: true,
+            totalClean: true,
+            dateCreate: true,
+            city: true,
+            avitoName: true,
+            phone: true,
+          },
+        },
+      },
+    });
+
+    if (!master) {
+      throw new NotFoundException('Master not found');
+    }
+
+    return {
+      success: true,
+      data: {
+        master: {
+          id: master.id,
+          name: master.name,
+          cities: master.cities,
+        },
+        orders: master.orders,
+      },
+    };
+  }
 }
 
