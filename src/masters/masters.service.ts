@@ -320,13 +320,13 @@ export class MastersService {
         cities: true,
         orders: {
           where: {
-            status: 'completed',
+            statusOrder: 'completed',
             // Добавляем фильтр по дате, если нужно
           },
           select: {
             id: true,
-            totalClean: true,
-            dateCreate: true,
+            clean: true,
+            createDate: true,
           },
         },
       },
@@ -334,7 +334,7 @@ export class MastersService {
 
     // Группируем данные по мастерам
     const mastersData = masters.map(master => {
-      const totalAmount = master.orders.reduce((sum, order) => sum + (order.totalClean || 0), 0);
+      const totalAmount = master.orders.reduce((sum, order) => sum + Number(order.clean || 0), 0);
       return {
         id: master.id,
         name: master.name,
@@ -364,15 +364,14 @@ export class MastersService {
         cities: true,
         orders: {
           where: {
-            status: 'completed',
+            statusOrder: 'completed',
           },
           select: {
             id: true,
-            totalClean: true,
-            dateCreate: true,
+            clean: true,
+            createDate: true,
             city: true,
-            avitoName: true,
-            phone: true,
+            rk: true,
           },
         },
       },
