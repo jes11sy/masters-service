@@ -1,0 +1,31 @@
+import { Controller, Get, UseGuards, Param } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { AuthGuard } from '@nestjs/passport';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { UserRole } from '../auth/user-role.enum';
+import { MastersService } from '../masters/masters.service';
+
+@ApiTags('Master Handover')
+@Controller('api/v1/master-handover')
+export class MasterHandoverController {
+  constructor(private readonly mastersService: MastersService) {}
+
+  @Get('summary')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.DIRECTOR, UserRole.CALLCENTRE_ADMIN)
+  @ApiOperation({ summary: 'Get master handover summary' })
+  async getHandoverSummary() {
+    return this.mastersService.getHandoverSummary();
+  }
+
+  @Get(':id')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.DIRECTOR, UserRole.CALLCENTRE_ADMIN)
+  @ApiOperation({ summary: 'Get master handover details' })
+  async getHandoverDetails(@Param('id') id: string) {
+    return this.mastersService.getHandoverDetails(+id);
+  }
+}
