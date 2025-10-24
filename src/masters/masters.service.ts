@@ -334,7 +334,7 @@ export class MastersService {
 
     // Группируем данные по мастерам
     const mastersData = masters.map(master => {
-      const totalAmount = master.orders.reduce((sum, order) => sum + Number(order.clean || 0), 0);
+      const totalAmount = master.orders.reduce((sum, order) => sum + (order.clean?.toNumber() || 0), 0);
       return {
         id: master.id,
         name: master.name,
