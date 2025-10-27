@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, HttpCode, HttpStatus, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { MastersService } from './masters.service';
@@ -97,6 +97,15 @@ export class MastersController {
   @ApiOperation({ summary: 'Get masters by city' })
   async findByCity(@Param('city') city: string) {
     return this.mastersService.findByCity(city);
+  }
+
+  @Get('profile')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.MASTER)
+  @ApiOperation({ summary: 'Get master profile' })
+  async getProfile(@Request() req: any) {
+    return this.mastersService.getProfile(req.user);
   }
 
   @Put(':id/status')

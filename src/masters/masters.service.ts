@@ -393,5 +393,38 @@ export class MastersService {
       },
     };
   }
+
+  async getProfile(user: any) {
+    const masterId = user?.userId;
+    
+    if (!masterId) {
+      throw new Error('Master ID not found in token');
+    }
+
+    const master = await this.prisma.master.findUnique({
+      where: { id: masterId },
+      select: {
+        id: true,
+        name: true,
+        cities: true,
+        statusWork: true,
+        dateCreate: true,
+        note: true,
+        tgId: true,
+        chatId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!master) {
+      throw new NotFoundException('Master not found');
+    }
+
+    return {
+      success: true,
+      data: master,
+    };
+  }
 }
 
