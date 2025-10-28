@@ -364,10 +364,15 @@ export class MastersService {
         cities: true,
         orders: {
           where: {
-            statusOrder: 'completed',
+            statusOrder: 'Готово',
           },
           select: {
             id: true,
+            address: true,
+            problem: true,
+            result: true,
+            masterChange: true,
+            cashSubmissionStatus: true,
             clean: true,
             createDate: true,
             city: true,
@@ -389,7 +394,10 @@ export class MastersService {
           name: master.name,
           cities: master.cities,
         },
-        orders: master.orders,
+        orders: master.orders.map(order => ({
+          ...order,
+          masterName: master.name,
+        })),
       },
     };
   }
