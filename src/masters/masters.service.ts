@@ -321,7 +321,9 @@ export class MastersService {
         orders: {
           where: {
             statusOrder: 'Готово',
-            // Добавляем фильтр по дате, если нужно
+            cashSubmissionStatus: {
+              in: ['Не отправлено', 'На проверке'],
+            },
           },
           select: {
             id: true,
