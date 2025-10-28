@@ -365,6 +365,9 @@ export class MastersService {
         orders: {
           where: {
             statusOrder: 'Готово',
+            cashSubmissionStatus: {
+              in: ['Не отправлено', 'На проверке'],
+            },
           },
           select: {
             id: true,
@@ -373,6 +376,7 @@ export class MastersService {
             result: true,
             masterChange: true,
             cashSubmissionStatus: true,
+            cashReceiptDoc: true,
             clean: true,
             createDate: true,
             city: true,
@@ -432,6 +436,66 @@ export class MastersService {
     return {
       success: true,
       data: master,
+    };
+  }
+
+  async approveMasterHandover(orderId: number, user: any) {
+    const directorId = user?.userId;
+
+    if (!directorId) {
+      throw new Error('Director ID not found in token');
+    }
+
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: {
+        cashSubmissionStatus: 'Одобрено',
+        cashApprovedBy: directorId,
+        cashApprovedDate: new Date(),
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Сдача мастера одобрена',
+    };
+  }
+
+  async rejectMasterHandover(orderId: number, user: any) {
+    const directorId = user?.userId;
+
+    if (!directorId) {
+      throw new Error('Director ID not found in token');
+    }
+
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: {
+        cashSubmissionStatus: 'Отклонено',
+        cashApprovedBy: directorId,
+        cashApprovedDate: new Date(),
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Сдача мастера отклонена',
     };
   }
 }
