@@ -1,8 +1,14 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMasterDto } from './dto/create-master.dto';
 import { UpdateMasterDto } from './dto/update-master.dto';
+import { UserRole } from '../auth/roles.guard';
 import * as bcrypt from 'bcryptjs';
+import { Prisma } from '@prisma/client';
+
+// Константы для валидации
+const BCRYPT_ROUNDS = 12;
+const ALLOWED_STATUSES = ['работает', 'уволен', 'отпуск', 'больничный'] as const;
 
 @Injectable()
 export class MastersService {
@@ -10,8 +16,31 @@ export class MastersService {
 
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * Безопасное хеширование пароля
+   */
+  private async hashPassword(password: string): Promise<string> {
+    return bcrypt.hash(password, BCRYPT_ROUNDS);
+  }
+
+  /**
+   * Валидация допустимого статуса
+   */
+  private validateStatus(status: string): void {
+    if (!ALLOWED_STATUSES.includes(status as any)) {
+      throw new BadRequestException(
+        `Недопустимое значение статуса. Допустимые: ${ALLOWED_STATUSES.join(', ')}`
+      );
+    }
+  }
+
   async findAll(city?: string, status?: string) {
-    const where: any = {};
+    // Валидация статуса
+    if (status && status !== 'all') {
+      this.validateStatus(status);
+    }
+
+    const where: Prisma.MasterWhereInput = {};
 
     if (city && city !== 'all') {
       where.cities = { has: city };
@@ -43,6 +72,8 @@ export class MastersService {
         { dateCreate: 'desc' },
       ],
     });
+
+    this.logger.log(`Retrieved ${masters.length} masters (city: ${city || 'all'}, status: ${status || 'all'})`);
 
     return {
       success: true,
@@ -109,14 +140,27 @@ export class MastersService {
   }
 
   async create(createMasterDto: CreateMasterDto) {
-    const { password, cities, ...masterData } = createMasterDto;
+    const { password, cities, login, ...masterData } = createMasterDto;
 
-    // Хэшируем пароль, если предоставлен
-    const hashedPassword = password ? await bcrypt.hash(password, 10) : undefined;
+    // Проверка уникальности логина
+    if (login) {
+      const existingMaster = await this.prisma.master.findUnique({
+        where: { login },
+        select: { id: true },
+      });
+      
+      if (existingMaster) {
+        throw new BadRequestException(`Логин "${login}" уже используется`);
+      }
+    }
+
+    // Хэшируем пароль с улучшенным алгоритмом
+    const hashedPassword = password ? await this.hashPassword(password) : undefined;
 
     const master = await this.prisma.master.create({
       data: {
         ...masterData,
+        login,
         password: hashedPassword,
         cities: cities || [],
         statusWork: createMasterDto.statusWork || 'работает',
@@ -139,7 +183,13 @@ export class MastersService {
       },
     });
 
-    this.logger.log(`Master created: ${master.name} (ID: ${master.id})`);
+    this.logger.log({
+      action: 'MASTER_CREATED',
+      masterId: master.id,
+      name: master.name,
+      login: master.login,
+      timestamp: new Date().toISOString(),
+    });
 
     return {
       success: true,
@@ -148,24 +198,53 @@ export class MastersService {
     };
   }
 
-  async update(id: number, updateMasterDto: UpdateMasterDto) {
-    const { password, cities, ...masterData } = updateMasterDto;
+  async update(id: number, updateMasterDto: UpdateMasterDto, requestUser?: any) {
+    const { password, cities, login, ...masterData } = updateMasterDto;
 
     // Проверяем существование мастера
-    const existingMaster = await this.prisma.master.findUnique({ where: { id } });
+    const existingMaster = await this.prisma.master.findUnique({ 
+      where: { id },
+      select: { id: true, login: true, name: true },
+    });
+    
     if (!existingMaster) {
       throw new NotFoundException(`Master with ID ${id} not found`);
     }
 
+    // Проверка уникальности логина при изменении
+    if (login && login !== existingMaster.login) {
+      const loginExists = await this.prisma.master.findUnique({
+        where: { login },
+        select: { id: true },
+      });
+      
+      if (loginExists) {
+        throw new BadRequestException(`Логин "${login}" уже используется`);
+      }
+    }
+
     // Подготавливаем данные для обновления
-    const updateData: any = {
+    const updateData: Prisma.MasterUpdateInput = {
       ...masterData,
       updatedAt: new Date(),
     };
 
-    // Хэшируем пароль, если предоставлен
+    // Хэшируем пароль с улучшенным алгоритмом
     if (password) {
-      updateData.password = await bcrypt.hash(password, 10);
+      updateData.password = await this.hashPassword(password);
+      
+      this.logger.warn({
+        action: 'PASSWORD_CHANGED',
+        masterId: id,
+        masterName: existingMaster.name,
+        by: requestUser?.userId || 'unknown',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    // Обновляем логин
+    if (login !== undefined) {
+      updateData.login = login;
     }
 
     // Обновляем города, если предоставлены
@@ -193,7 +272,14 @@ export class MastersService {
       },
     });
 
-    this.logger.log(`Master updated: ${master.name} (ID: ${master.id})`);
+    this.logger.log({
+      action: 'MASTER_UPDATED',
+      masterId: master.id,
+      name: master.name,
+      changedFields: Object.keys(updateMasterDto),
+      by: requestUser?.userId || 'unknown',
+      timestamp: new Date().toISOString(),
+    });
 
     return {
       success: true,
@@ -261,33 +347,22 @@ export class MastersService {
       throw new NotFoundException(`Master with ID ${masterId} not found`);
     }
 
-    // Фильтр по датам
-    const dateFilter: any = {};
-    if (startDate || endDate) {
-      dateFilter.createDate = {};
-      if (startDate) dateFilter.createDate.gte = new Date(startDate);
-      if (endDate) dateFilter.createDate.lte = new Date(endDate);
-    }
+    // Оптимизированный запрос - один запрос вместо четырех
+    const stats = await this.prisma.$queryRaw<any[]>`
+      SELECT 
+        COUNT(*) as total_orders,
+        COUNT(*) FILTER (WHERE status_order = 'Закрыт') as completed_orders,
+        COUNT(*) FILTER (WHERE status_order IN ('В работе', 'Назначен мастер', 'Мастер выехал')) as in_progress_orders,
+        COALESCE(SUM(result) FILTER (WHERE result IS NOT NULL), 0) as total_revenue,
+        COALESCE(SUM(clean) FILTER (WHERE clean IS NOT NULL), 0) as clean_revenue,
+        COALESCE(SUM(master_change) FILTER (WHERE master_change IS NOT NULL), 0) as master_change_revenue
+      FROM orders
+      WHERE master_id = ${masterId}
+        ${startDate ? Prisma.sql`AND create_date >= ${new Date(startDate)}::timestamp` : Prisma.empty}
+        ${endDate ? Prisma.sql`AND create_date <= ${new Date(endDate)}::timestamp` : Prisma.empty}
+    `;
 
-    const [totalOrders, completedOrders, inProgressOrders, revenue] = await Promise.all([
-      this.prisma.order.count({
-        where: { masterId, ...dateFilter },
-      }),
-      this.prisma.order.count({
-        where: { masterId, statusOrder: 'Закрыт', ...dateFilter },
-      }),
-      this.prisma.order.count({
-        where: {
-          masterId,
-          statusOrder: { in: ['В работе', 'Назначен мастер', 'Мастер выехал'] },
-          ...dateFilter,
-        },
-      }),
-      this.prisma.order.aggregate({
-        where: { masterId, result: { not: null }, ...dateFilter },
-        _sum: { result: true, clean: true, masterChange: true },
-      }),
-    ]);
+    const stat = stats[0];
 
     return {
       success: true,
@@ -298,61 +373,55 @@ export class MastersService {
           cities: master.cities,
         },
         orders: {
-          total: totalOrders,
-          completed: completedOrders,
-          inProgress: inProgressOrders,
+          total: parseInt(stat.total_orders),
+          completed: parseInt(stat.completed_orders),
+          inProgress: parseInt(stat.in_progress_orders),
         },
         revenue: {
-          total: Number(revenue._sum.result || 0),
-          clean: Number(revenue._sum.clean || 0),
-          masterChange: Number(revenue._sum.masterChange || 0),
+          total: parseFloat(stat.total_revenue).toFixed(2),
+          clean: parseFloat(stat.clean_revenue).toFixed(2),
+          masterChange: parseFloat(stat.master_change_revenue).toFixed(2),
         },
       },
     };
   }
 
   async getHandoverSummary() {
-    // Получаем всех мастеров с их заказами
-    const masters = await this.prisma.master.findMany({
-      select: {
-        id: true,
-        name: true,
-        cities: true,
-        orders: {
-          where: {
-            statusOrder: 'Готово',
-            cashSubmissionStatus: {
-              in: ['Не отправлено', 'На проверке'],
-            },
-          },
-          select: {
-            id: true,
-            clean: true,
-            createDate: true,
-          },
-        },
-      },
-    });
+    // Оптимизированный запрос - агрегация на стороне БД
+    const aggregatedData = await this.prisma.$queryRaw<any[]>`
+      SELECT 
+        m.id,
+        m.name,
+        m.cities,
+        COUNT(o.id) as "ordersCount",
+        COALESCE(SUM(o.clean), 0) as "totalAmount"
+      FROM master m
+      LEFT JOIN orders o ON o.master_id = m.id
+        AND o.status_order = 'Готово'
+        AND o.cash_submission_status IN ('Не отправлено', 'На проверке')
+      GROUP BY m.id, m.name, m.cities
+      HAVING COUNT(o.id) > 0
+      ORDER BY m.name
+    `;
 
-    // Группируем данные по мастерам
-    const mastersData = masters.map(master => {
-      const totalAmount = master.orders.reduce((sum, order) => sum + (order.clean?.toNumber() || 0), 0);
-      return {
-        id: master.id,
-        name: master.name,
-        cities: master.cities,
-        totalAmount,
-        ordersCount: master.orders.length,
-      };
-    });
+    const mastersData = aggregatedData.map(m => ({
+      id: m.id,
+      name: m.name,
+      cities: m.cities,
+      totalAmount: parseFloat(m.totalAmount),
+      ordersCount: parseInt(m.ordersCount),
+    }));
 
-    const totalAmount = mastersData.reduce((sum, master) => sum + master.totalAmount, 0);
+    const totalAmount = mastersData.reduce(
+      (sum, master) => sum + master.totalAmount, 
+      0
+    );
 
     return {
       success: true,
       data: {
         masters: mastersData,
-        totalAmount,
+        totalAmount: parseFloat(totalAmount.toFixed(2)),
       },
     };
   }
@@ -412,7 +481,18 @@ export class MastersService {
     const masterId = user?.userId;
     
     if (!masterId) {
-      throw new Error('Master ID not found in token');
+      throw new BadRequestException('Master ID not found in token');
+    }
+
+    // Проверяем, что пользователь запрашивает свой собственный профиль
+    if (user.role === UserRole.MASTER && user.userId !== masterId) {
+      this.logger.warn({
+        action: 'UNAUTHORIZED_PROFILE_ACCESS',
+        userId: user.userId,
+        attemptedAccessTo: masterId,
+        timestamp: new Date().toISOString(),
+      });
+      throw new ForbiddenException('Вы можете просматривать только свой профиль');
     }
 
     const master = await this.prisma.master.findUnique({
@@ -434,6 +514,13 @@ export class MastersService {
     if (!master) {
       throw new NotFoundException('Master not found');
     }
+
+    this.logger.log({
+      action: 'PROFILE_ACCESSED',
+      masterId: master.id,
+      by: user.userId,
+      timestamp: new Date().toISOString(),
+    });
 
     return {
       success: true,

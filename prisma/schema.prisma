@@ -25,6 +25,11 @@ model Master {
   
   orders Order[]
 
+  // Индексы для производительности
+  @@index([login]) // Для быстрого поиска по логину
+  @@index([statusWork, dateCreate]) // Для фильтрации и сортировки
+  @@index([statusWork]) // Для быстрой фильтрации по статусу
+  @@index([cities]) // GIN индекс для поиска по массиву городов (PostgreSQL)
   @@map("master")
 }
 
@@ -67,6 +72,7 @@ model Order {
   cashApprovedDate     DateTime? @map("cash_approved_date")
   master               Master?   @relation(fields: [masterId], references: [id])
   
+  // Существующие индексы
   @@index([statusOrder, city])
   @@index([closingData])
   @@index([masterId, city, closingData])
@@ -75,6 +81,14 @@ model Order {
   @@index([operatorNameId])
   @@index([createDate])
   @@index([avitoName])
+  
+  // Дополнительные индексы для производительности
+  @@index([masterId, statusOrder]) // Для быстрой фильтрации заказов мастера по статусу
+  @@index([masterId, createDate]) // Для статистики по датам
+  @@index([statusOrder, cashSubmissionStatus]) // Для getHandoverSummary
+  @@index([cashSubmissionStatus, statusOrder]) // Альтернативный порядок
+  @@index([masterId]) // Для быстрого поиска всех заказов мастера
+  
   @@map("orders")
 }
 

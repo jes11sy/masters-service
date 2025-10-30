@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional, IsArray } from 'class-validator';
+import { IsString, IsOptional, IsArray, MinLength, Matches } from 'class-validator';
 
 export class UpdateMasterDto {
   @ApiPropertyOptional({ example: 'Иван Иванов' })
@@ -12,9 +12,17 @@ export class UpdateMasterDto {
   @IsOptional()
   login?: string;
 
-  @ApiPropertyOptional({ example: 'newpassword123' })
+  @ApiPropertyOptional({ 
+    example: 'NewSecureP@ssw0rd',
+    description: 'Минимум 8 символов, должен содержать заглавные и строчные буквы, цифры и спецсимволы'
+  })
   @IsString()
   @IsOptional()
+  @MinLength(8, { message: 'Пароль должен содержать минимум 8 символов' })
+  @Matches(
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
+    { message: 'Пароль должен содержать заглавные и строчные буквы, цифры и спецсимволы (@$!%*?&)' }
+  )
   password?: string;
 
   @ApiPropertyOptional({ example: ['Москва', 'Санкт-Петербург'] })

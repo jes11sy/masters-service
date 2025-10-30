@@ -4,6 +4,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { MastersService } from './masters.service';
 import { CreateMasterDto } from './dto/create-master.dto';
 import { UpdateMasterDto } from './dto/update-master.dto';
+import { UpdateStatusDto } from './dto/update-status.dto';
 import { RolesGuard, Roles, UserRole } from '../auth/roles.guard';
 
 @ApiTags('masters')
@@ -115,9 +116,9 @@ export class MastersController {
   @ApiOperation({ summary: 'Update master status' })
   async updateStatus(
     @Param('id') id: string,
-    @Body() body: { status: string },
+    @Body() updateStatusDto: UpdateStatusDto,
   ) {
-    return this.mastersService.updateStatus(+id, body.status);
+    return this.mastersService.updateStatus(+id, updateStatusDto.status);
   }
 
   @Get('handover/summary')
