@@ -32,7 +32,7 @@ export class MasterHandoverController {
   @ApiBearerAuth()
   @Roles(UserRole.DIRECTOR, UserRole.CALLCENTRE_ADMIN)
   @ApiOperation({ summary: 'Approve master handover' })
-  async approveHandover(@Param('orderId') orderId: string, @Request() req) {
+  async approveHandover(@Param('orderId') orderId: string, @Request() req: any) {
     return this.mastersService.approveMasterHandover(+orderId, req.user);
   }
 
@@ -41,7 +41,7 @@ export class MasterHandoverController {
   @ApiBearerAuth()
   @Roles(UserRole.DIRECTOR, UserRole.CALLCENTRE_ADMIN)
   @ApiOperation({ summary: 'Reject master handover' })
-  async rejectHandover(@Param('orderId') orderId: string, @Request() req) {
+  async rejectHandover(@Param('orderId') orderId: string, @Request() req: any) {
     return this.mastersService.rejectMasterHandover(+orderId, req.user);
   }
 }

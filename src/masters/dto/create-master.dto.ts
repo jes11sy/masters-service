@@ -5,7 +5,7 @@ export class CreateMasterDto {
   @ApiProperty({ example: 'Иван Иванов' })
   @IsString()
   @IsNotEmpty()
-  name: string;
+  name!: string;
 
   @ApiPropertyOptional({ example: 'master1' })
   @IsString()
@@ -29,7 +29,7 @@ export class CreateMasterDto {
   @ApiProperty({ example: ['Москва', 'Санкт-Петербург'] })
   @IsArray()
   @IsString({ each: true })
-  cities: string[];
+  cities!: string[];
 
   @ApiPropertyOptional({ example: 'работает', default: 'работает' })
   @IsString()

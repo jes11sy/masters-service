@@ -9,7 +9,7 @@ export enum UserRole {
 }
 
 export const Roles = (...roles: UserRole[]) => {
-  return (target: any, key?: string, descriptor?: PropertyDescriptor) => {
+  return (target: any, _key?: string, descriptor?: PropertyDescriptor) => {
     Reflect.defineMetadata('roles', roles, descriptor ? descriptor.value : target);
     return descriptor || target;
   };

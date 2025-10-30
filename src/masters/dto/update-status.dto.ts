@@ -18,6 +18,6 @@ export class UpdateStatusDto {
     message: 'Недопустимое значение статуса. Допустимые: работает, уволен, отпуск, больничный',
   })
   @IsNotEmpty({ message: 'Статус обязателен' })
-  status: MasterStatus;
+  status!: MasterStatus;
 }
 
