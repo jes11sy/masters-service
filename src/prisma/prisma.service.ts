@@ -6,8 +6,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   private readonly logger = new Logger(PrismaService.name);
 
   constructor() {
-    const isDevelopment = process.env.NODE_ENV !== 'production';
-    
     // ✅ ОПТИМИЗИРОВАНО: Masters Service - средняя нагрузка
     // Управление мастерами, их расписанием и назначениями
     const databaseUrl = process.env.DATABASE_URL || '';
