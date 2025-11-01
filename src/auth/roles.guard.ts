@@ -3,6 +3,7 @@ import { Reflector } from '@nestjs/core';
 
 export enum UserRole {
   DIRECTOR = 'director',
+  ADMIN = 'admin',
   CALLCENTRE_ADMIN = 'callcentre_admin',
   OPERATOR = 'operator',
   MASTER = 'master',

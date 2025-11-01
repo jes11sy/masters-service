@@ -26,7 +26,7 @@ export class MastersController {
   @Get()
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.DIRECTOR, UserRole.CALLCENTRE_ADMIN)
+  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN)
   @ApiOperation({ summary: 'Get all masters' })
   @ApiQuery({ name: 'city', required: false, type: String })
   @ApiQuery({ name: 'status', required: false, type: String })
@@ -40,7 +40,7 @@ export class MastersController {
   @Get(':id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.DIRECTOR, UserRole.CALLCENTRE_ADMIN)
+  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN)
   @ApiOperation({ summary: 'Get master by ID' })
   async findOne(@Param('id') id: string) {
     return this.mastersService.findOne(+id);
@@ -79,7 +79,7 @@ export class MastersController {
   @Get(':id/orders')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.DIRECTOR, UserRole.CALLCENTRE_ADMIN, UserRole.MASTER)
+  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN, UserRole.MASTER)
   @ApiOperation({ summary: 'Get master orders statistics' })
   @ApiQuery({ name: 'startDate', required: false, type: String })
   @ApiQuery({ name: 'endDate', required: false, type: String })
@@ -94,7 +94,7 @@ export class MastersController {
   @Get('city/:city')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.DIRECTOR, UserRole.CALLCENTRE_ADMIN)
+  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN)
   @ApiOperation({ summary: 'Get masters by city' })
   async findByCity(@Param('city') city: string) {
     return this.mastersService.findByCity(city);
@@ -124,7 +124,7 @@ export class MastersController {
   @Get('handover/summary')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.DIRECTOR, UserRole.CALLCENTRE_ADMIN)
+  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN)
   @ApiOperation({ summary: 'Get master handover summary' })
   async getHandoverSummary() {
     return this.mastersService.getHandoverSummary();
@@ -133,7 +133,7 @@ export class MastersController {
   @Get('handover/:id')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @ApiBearerAuth()
-  @Roles(UserRole.DIRECTOR, UserRole.CALLCENTRE_ADMIN)
+  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN)
   @ApiOperation({ summary: 'Get master handover details' })
   async getHandoverDetails(@Param('id') id: string) {
     return this.mastersService.getHandoverDetails(+id);
