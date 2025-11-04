@@ -34,7 +34,7 @@ export class MastersService {
     }
   }
 
-  async findAll(city?: string, status?: string) {
+  async findAll(city?: string, status?: string, user?: any) {
     // Валидация статуса
     if (status && status !== 'all') {
       this.validateStatus(status);
@@ -42,7 +42,16 @@ export class MastersService {
 
     const where: Prisma.MasterWhereInput = {};
 
-    if (city && city !== 'all') {
+    // Фильтрация по городам директора
+    if (user?.role === 'director' && user?.cities && user.cities.length > 0) {
+      where.cities = { hasSome: user.cities };
+      
+      // Если директор дополнительно фильтрует по конкретному городу из своего списка
+      if (city && city !== 'all' && user.cities.includes(city)) {
+        where.cities = { has: city };
+      }
+    } else if (city && city !== 'all') {
+      // Для админа можно фильтровать по любому городу
       where.cities = { has: city };
     }
 

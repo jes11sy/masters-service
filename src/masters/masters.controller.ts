@@ -33,8 +33,9 @@ export class MastersController {
   async findAll(
     @Query('city') city?: string,
     @Query('status') status?: string,
+    @Request() req?: any,
   ) {
-    return this.mastersService.findAll(city, status);
+    return this.mastersService.findAll(city, status, req.user);
   }
 
   @Get(':id')
