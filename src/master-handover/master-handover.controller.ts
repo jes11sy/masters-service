@@ -14,8 +14,8 @@ export class MasterHandoverController {
   @ApiBearerAuth()
   @Roles(UserRole.DIRECTOR, UserRole.CALLCENTRE_ADMIN)
   @ApiOperation({ summary: 'Get master handover summary' })
-  async getHandoverSummary() {
-    return this.mastersService.getHandoverSummary();
+  async getHandoverSummary(@Request() req: any) {
+    return this.mastersService.getHandoverSummary(req.user);
   }
 
   @Get(':id')

@@ -395,9 +395,16 @@ export class MastersService {
     };
   }
 
-  async getHandoverSummary() {
+  async getHandoverSummary(user?: any) {
+    // Фильтрация по городам директора
+    let cityFilter = '';
+    if (user?.role === 'director' && user?.cities && Array.isArray(user.cities) && user.cities.length > 0) {
+      const cities = user.cities.map((city: string) => `'${city.replace(/'/g, "''")}'`).join(', ');
+      cityFilter = `AND o.city IN (${cities})`;
+    }
+
     // Оптимизированный запрос - агрегация на стороне БД
-    const aggregatedData = await this.prisma.$queryRaw<any[]>`
+    const query = `
       SELECT 
         m.id,
         m.name,
@@ -408,10 +415,13 @@ export class MastersService {
       LEFT JOIN orders o ON o.master_id = m.id
         AND o.status_order = 'Готово'
         AND o.cash_submission_status IN ('Не отправлено', 'На проверке')
+        ${cityFilter}
       GROUP BY m.id, m.name, m.cities
       HAVING COUNT(o.id) > 0
       ORDER BY m.name
     `;
+
+    const aggregatedData = await this.prisma.$queryRawUnsafe<any[]>(query);
 
     const mastersData = aggregatedData.map(m => ({
       id: m.id,
