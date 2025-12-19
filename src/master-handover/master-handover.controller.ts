@@ -1,6 +1,6 @@
 import { Controller, Get, Post, UseGuards, Param, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
+import { CookieJwtAuthGuard } from '../auth/guards/cookie-jwt-auth.guard';
 import { RolesGuard, Roles, UserRole } from '../auth/roles.guard';
 import { MastersService } from '../masters/masters.service';
 
@@ -10,7 +10,7 @@ export class MasterHandoverController {
   constructor(private readonly mastersService: MastersService) {}
 
   @Get('summary')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @Roles(UserRole.DIRECTOR, UserRole.CALLCENTRE_ADMIN)
   @ApiOperation({ summary: 'Get master handover summary' })
@@ -19,7 +19,7 @@ export class MasterHandoverController {
   }
 
   @Get(':id')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @Roles(UserRole.DIRECTOR, UserRole.CALLCENTRE_ADMIN)
   @ApiOperation({ summary: 'Get master handover details' })
@@ -28,7 +28,7 @@ export class MasterHandoverController {
   }
 
   @Post('approve/:orderId')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @Roles(UserRole.DIRECTOR, UserRole.CALLCENTRE_ADMIN)
   @ApiOperation({ summary: 'Approve master handover' })
@@ -37,7 +37,7 @@ export class MasterHandoverController {
   }
 
   @Post('reject/:orderId')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @Roles(UserRole.DIRECTOR, UserRole.CALLCENTRE_ADMIN)
   @ApiOperation({ summary: 'Reject master handover' })
