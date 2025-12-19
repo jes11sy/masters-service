@@ -19,13 +19,25 @@ async function bootstrap() {
     }),
   );
 
+  // 🍪 РЕГИСТРАЦИЯ COOKIE PLUGIN (до CORS!)
+  await app.register(require('@fastify/cookie'), {
+    secret: process.env.COOKIE_SECRET || process.env.JWT_SECRET,
+  });
+  logger.log('✅ Cookie plugin registered');
+
   // CORS - строгая конфигурация
   const corsOrigins = process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000'];
   await app.register(cors, {
     origin: corsOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Accept',
+      'Origin',
+      'X-Use-Cookies', // 🍪 Поддержка cookie mode
+    ],
     exposedHeaders: ['X-Total-Count'],
     maxAge: 86400, // 24 часа
   });
