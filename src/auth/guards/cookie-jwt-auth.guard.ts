@@ -1,6 +1,6 @@
 import { Injectable, ExecutionContext, UnauthorizedException, Logger } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { CookieConfig } from '../../config/cookie.config';
+import { CookieConfig, getCookieName } from '../../config/cookie.config';
 import { FastifyRequest } from 'fastify';
 
 /**
@@ -24,9 +24,19 @@ export class CookieJwtAuthGuard extends AuthGuard('jwt') {
     const cookiesSource = (request as any).cookies || (request.raw as any)?.cookies || null;
     const unsignCookieFn = (request as any).unsignCookie || (request.raw as any)?.unsignCookie || null;
     
+    // Определяем имя cookie на основе origin
+    const origin = request.headers.origin || request.headers.referer;
+    const accessTokenName = getCookieName(CookieConfig.ACCESS_TOKEN_NAME, origin);
+    
     if (cookiesSource && CookieConfig.ENABLE_COOKIE_SIGNING && unsignCookieFn) {
-      // Пытаемся получить подписанный cookie
-      const signedCookie = cookiesSource[CookieConfig.ACCESS_TOKEN_NAME];
+      // Пытаемся получить подписанный cookie с динамическим именем
+      let signedCookie = cookiesSource[accessTokenName];
+      
+      // Fallback на базовое имя
+      if (!signedCookie) {
+        signedCookie = cookiesSource[CookieConfig.ACCESS_TOKEN_NAME];
+      }
+      
       if (signedCookie) {
         const unsigned = unsignCookieFn(signedCookie, CookieConfig.COOKIE_SECRET);
         cookieToken = unsigned?.valid ? unsigned.value : null;
@@ -37,8 +47,13 @@ export class CookieJwtAuthGuard extends AuthGuard('jwt') {
         }
       }
     } else if (cookiesSource) {
-      // Неподписанный cookie
-      cookieToken = cookiesSource[CookieConfig.ACCESS_TOKEN_NAME];
+      // Неподписанный cookie с динамическим именем
+      cookieToken = cookiesSource[accessTokenName];
+      
+      // Fallback на базовое имя
+      if (!cookieToken) {
+        cookieToken = cookiesSource[CookieConfig.ACCESS_TOKEN_NAME];
+      }
     }
     
     // Если токен найден в cookie и нет Authorization header, добавляем его
