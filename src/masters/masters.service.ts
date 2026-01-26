@@ -656,7 +656,7 @@ export class MastersService {
     // Группируем расписание по мастерам
     const scheduleMap = new Map<number, { date: string; isWorkDay: boolean }[]>();
     schedules.forEach(s => {
-      const dateStr = s.date.toISOString().split('T')[0];
+      const dateStr = s.date.toISOString().slice(0, 10);
       if (!scheduleMap.has(s.masterId)) {
         scheduleMap.set(s.masterId, []);
       }
