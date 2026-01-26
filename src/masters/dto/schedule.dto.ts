@@ -5,11 +5,11 @@ import { ApiProperty } from '@nestjs/swagger';
 export class ScheduleDayDto {
   @ApiProperty({ example: '2026-01-27', description: 'Дата в формате YYYY-MM-DD' })
   @IsDateString()
-  date: string;
+  date!: string;
 
   @ApiProperty({ example: true, description: 'true = рабочий день, false = выходной' })
   @IsBoolean()
-  isWorkDay: boolean;
+  isWorkDay!: boolean;
 }
 
 export class UpdateScheduleDto {
@@ -17,7 +17,7 @@ export class UpdateScheduleDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ScheduleDayDto)
-  days: ScheduleDayDto[];
+  days!: ScheduleDayDto[];
 }
 
 export class GetScheduleQueryDto {
