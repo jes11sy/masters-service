@@ -143,6 +143,21 @@ export class MastersController {
 
   // ==================== SCHEDULE ENDPOINTS ====================
 
+  @Get('schedules')
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN)
+  @ApiOperation({ summary: 'Get all masters schedules for period (filtered by director cities)' })
+  @ApiQuery({ name: 'startDate', required: true, type: String, description: 'YYYY-MM-DD' })
+  @ApiQuery({ name: 'endDate', required: true, type: String, description: 'YYYY-MM-DD' })
+  async getAllSchedules(
+    @Request() req: any,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+  ) {
+    return this.mastersService.getAllSchedules(req.user, startDate, endDate);
+  }
+
   @Get('profile/schedule')
   @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()

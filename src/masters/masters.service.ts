@@ -610,6 +610,75 @@ export class MastersService {
   // ==================== SCHEDULE METHODS ====================
 
   /**
+   * Получить расписание всех мастеров за период (с фильтрацией по городам директора)
+   */
+  async getAllSchedules(user: any, startDate: string, endDate: string) {
+    // Фильтр по городам директора
+    const where: Prisma.MasterWhereInput = {
+      statusWork: { not: 'уволен' }, // Исключаем уволенных
+    };
+
+    // Если директор - фильтруем по его городам
+    if (user?.role === 'director' && user?.cities && user.cities.length > 0) {
+      where.cities = { hasSome: user.cities };
+    }
+
+    // Получаем мастеров
+    const masters = await this.prisma.master.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        statusWork: true,
+        cities: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    // Получаем расписание для всех мастеров за период одним запросом
+    const masterIds = masters.map(m => m.id);
+    
+    const schedules = await this.prisma.masterSchedule.findMany({
+      where: {
+        masterId: { in: masterIds },
+        date: {
+          gte: new Date(startDate),
+          lte: new Date(endDate),
+        },
+      },
+      select: {
+        masterId: true,
+        date: true,
+        isWorkDay: true,
+      },
+    });
+
+    // Группируем расписание по мастерам
+    const scheduleMap = new Map<number, { date: string; isWorkDay: boolean }[]>();
+    schedules.forEach(s => {
+      const dateStr = s.date.toISOString().split('T')[0];
+      if (!scheduleMap.has(s.masterId)) {
+        scheduleMap.set(s.masterId, []);
+      }
+      scheduleMap.get(s.masterId)!.push({ date: dateStr, isWorkDay: s.isWorkDay });
+    });
+
+    return {
+      success: true,
+      data: {
+        masters: masters.map(m => ({
+          id: m.id,
+          name: m.name,
+          statusWork: m.statusWork,
+          cities: m.cities,
+          schedule: scheduleMap.get(m.id) || [],
+        })),
+        period: { startDate, endDate },
+      },
+    };
+  }
+
+  /**
    * Получить расписание мастера за период
    */
   async getSchedule(masterId: number, startDate?: string, endDate?: string) {
