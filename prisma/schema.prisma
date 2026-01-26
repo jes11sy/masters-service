@@ -23,7 +23,8 @@ model Master {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
   
-  orders Order[]
+  orders    Order[]
+  schedules MasterSchedule[]
 
   // Индексы для производительности
   @@index([login]) // Для быстрого поиска по логину
@@ -31,6 +32,22 @@ model Master {
   @@index([statusWork]) // Для быстрой фильтрации по статусу
   @@index([cities]) // GIN индекс для поиска по массиву городов (PostgreSQL)
   @@map("master")
+}
+
+model MasterSchedule {
+  id        Int      @id @default(autoincrement())
+  masterId  Int      @map("master_id")
+  date      DateTime @db.Date
+  isWorkDay Boolean  @default(true) @map("is_work_day")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  master Master @relation(fields: [masterId], references: [id], onDelete: Cascade)
+
+  @@unique([masterId, date])
+  @@index([masterId, date])
+  @@index([date])
+  @@map("master_schedule")
 }
 
 model Order {

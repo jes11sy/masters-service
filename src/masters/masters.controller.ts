@@ -5,6 +5,7 @@ import { MastersService } from './masters.service';
 import { CreateMasterDto } from './dto/create-master.dto';
 import { UpdateMasterDto } from './dto/update-master.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
+import { UpdateScheduleDto } from './dto/schedule.dto';
 import { RolesGuard, Roles, UserRole } from '../auth/roles.guard';
 
 @ApiTags('masters')
@@ -138,6 +139,62 @@ export class MastersController {
   @ApiOperation({ summary: 'Get master handover details' })
   async getHandoverDetails(@Param('id') id: string) {
     return this.mastersService.getHandoverDetails(+id);
+  }
+
+  // ==================== SCHEDULE ENDPOINTS ====================
+
+  @Get('profile/schedule')
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.MASTER)
+  @ApiOperation({ summary: 'Get own schedule (for master)' })
+  @ApiQuery({ name: 'startDate', required: false, type: String, description: 'YYYY-MM-DD' })
+  @ApiQuery({ name: 'endDate', required: false, type: String, description: 'YYYY-MM-DD' })
+  async getOwnSchedule(
+    @Request() req: any,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.mastersService.getOwnSchedule(req.user, startDate, endDate);
+  }
+
+  @Post('profile/schedule')
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.MASTER)
+  @ApiOperation({ summary: 'Update own schedule (for master)' })
+  async updateOwnSchedule(
+    @Request() req: any,
+    @Body() updateScheduleDto: UpdateScheduleDto,
+  ) {
+    return this.mastersService.updateOwnSchedule(req.user, updateScheduleDto.days);
+  }
+
+  @Get(':id/schedule')
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN)
+  @ApiOperation({ summary: 'Get master schedule by ID' })
+  @ApiQuery({ name: 'startDate', required: false, type: String, description: 'YYYY-MM-DD' })
+  @ApiQuery({ name: 'endDate', required: false, type: String, description: 'YYYY-MM-DD' })
+  async getSchedule(
+    @Param('id') id: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.mastersService.getSchedule(+id, startDate, endDate);
+  }
+
+  @Post(':id/schedule')
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.DIRECTOR, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Update master schedule by ID' })
+  async updateSchedule(
+    @Param('id') id: string,
+    @Body() updateScheduleDto: UpdateScheduleDto,
+  ) {
+    return this.mastersService.updateSchedule(+id, updateScheduleDto.days);
   }
 }
 

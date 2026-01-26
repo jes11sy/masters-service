@@ -606,5 +606,138 @@ export class MastersService {
       message: 'Сдача мастера отклонена',
     };
   }
+
+  // ==================== SCHEDULE METHODS ====================
+
+  /**
+   * Получить расписание мастера за период
+   */
+  async getSchedule(masterId: number, startDate?: string, endDate?: string) {
+    // Проверяем существование мастера
+    const master = await this.prisma.master.findUnique({
+      where: { id: masterId },
+      select: { id: true, name: true },
+    });
+
+    if (!master) {
+      throw new NotFoundException(`Master with ID ${masterId} not found`);
+    }
+
+    const where: Prisma.MasterScheduleWhereInput = {
+      masterId,
+    };
+
+    if (startDate || endDate) {
+      where.date = {};
+      if (startDate) {
+        where.date.gte = new Date(startDate);
+      }
+      if (endDate) {
+        where.date.lte = new Date(endDate);
+      }
+    }
+
+    const schedule = await this.prisma.masterSchedule.findMany({
+      where,
+      select: {
+        id: true,
+        date: true,
+        isWorkDay: true,
+      },
+      orderBy: { date: 'asc' },
+    });
+
+    return {
+      success: true,
+      data: {
+        masterId,
+        masterName: master.name,
+        schedule: schedule.map(s => ({
+          date: s.date.toISOString().split('T')[0],
+          isWorkDay: s.isWorkDay,
+        })),
+      },
+    };
+  }
+
+  /**
+   * Обновить расписание мастера (upsert - создать или обновить)
+   */
+  async updateSchedule(masterId: number, days: { date: string; isWorkDay: boolean }[]) {
+    // Проверяем существование мастера
+    const master = await this.prisma.master.findUnique({
+      where: { id: masterId },
+      select: { id: true, name: true },
+    });
+
+    if (!master) {
+      throw new NotFoundException(`Master with ID ${masterId} not found`);
+    }
+
+    // Используем транзакцию для атомарного обновления
+    const upsertPromises = days.map(day => 
+      this.prisma.masterSchedule.upsert({
+        where: {
+          masterId_date: {
+            masterId,
+            date: new Date(day.date),
+          },
+        },
+        create: {
+          masterId,
+          date: new Date(day.date),
+          isWorkDay: day.isWorkDay,
+        },
+        update: {
+          isWorkDay: day.isWorkDay,
+        },
+      })
+    );
+
+    await this.prisma.$transaction(upsertPromises);
+
+    this.logger.log({
+      action: 'SCHEDULE_UPDATED',
+      masterId,
+      masterName: master.name,
+      daysCount: days.length,
+      timestamp: new Date().toISOString(),
+    });
+
+    return {
+      success: true,
+      message: 'Расписание обновлено',
+      data: {
+        masterId,
+        updatedDays: days.length,
+      },
+    };
+  }
+
+  /**
+   * Получить своё расписание (для мастера)
+   */
+  async getOwnSchedule(user: any, startDate?: string, endDate?: string) {
+    const masterId = user?.userId;
+    
+    if (!masterId) {
+      throw new BadRequestException('Master ID not found in token');
+    }
+
+    return this.getSchedule(masterId, startDate, endDate);
+  }
+
+  /**
+   * Обновить своё расписание (для мастера)
+   */
+  async updateOwnSchedule(user: any, days: { date: string; isWorkDay: boolean }[]) {
+    const masterId = user?.userId;
+    
+    if (!masterId) {
+      throw new BadRequestException('Master ID not found in token');
+    }
+
+    return this.updateSchedule(masterId, days);
+  }
 }
 
