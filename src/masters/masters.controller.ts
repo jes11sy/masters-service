@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, HttpCode, HttpStatus, Request, ParseIntPipe, DefaultValuePipe } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, HttpCode, HttpStatus, Request, ParseIntPipe, DefaultValuePipe, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { CookieJwtAuthGuard } from '../auth/guards/cookie-jwt-auth.guard';
 import { MastersService } from './masters.service';
@@ -75,6 +75,22 @@ export class MastersController {
     @Query('endDate') endDate: string,
   ) {
     return this.mastersService.getAllSchedules(req.user, startDate, endDate);
+  }
+
+  @Get('employees')
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN)
+  @ApiOperation({ summary: 'Get all employees (masters, directors)' })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'role', required: false, type: String, enum: ['master', 'director'] })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  async getEmployees(
+    @Query() query: any,
+    @Request() req: any,
+  ) {
+    return this.mastersService.getEmployees(query, req.user);
   }
 
   @Get('handover/summary')
@@ -220,5 +236,22 @@ export class MastersController {
     @Body() updateScheduleDto: UpdateScheduleDto,
   ) {
     return this.mastersService.updateSchedule(id, updateScheduleDto.days);
+  }
+
+  @Put(':id/documents')
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.DIRECTOR, UserRole.MASTER)
+  @ApiOperation({ summary: 'Update master documents' })
+  async updateDocuments(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: any,
+    @Body() body: { contractDoc?: string; passportDoc?: string },
+  ) {
+    // Мастер может редактировать только свои документы
+    if (req.user.role === UserRole.MASTER && id !== req.user.userId) {
+      throw new ForbiddenException('You can only update your own documents');
+    }
+    return this.mastersService.updateDocuments(id, body);
   }
 }

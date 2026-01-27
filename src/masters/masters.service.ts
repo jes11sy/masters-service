@@ -902,4 +902,183 @@ export class MastersService {
 
     return this.updateSchedule(masterId, days);
   }
+
+  /**
+   * Получить всех сотрудников (мастера, директора)
+   */
+  async getEmployees(query: any, user?: any) {
+    const { search, role, page = 1, limit = 50 } = query;
+    const { skip, take, page: normalizedPage, limit: normalizedLimit } = this.normalizePagination(page, limit);
+
+    // Валидация поискового запроса
+    if (search && search.length > 100) {
+      throw new BadRequestException('Search query must not exceed 100 characters');
+    }
+
+    // Формируем условие для фильтрации
+    const mastersWhere: any = search ? {
+      OR: [
+        { name: { contains: search, mode: 'insensitive' } },
+        { login: { contains: search, mode: 'insensitive' } },
+      ],
+    } : {};
+
+    const directorsWhere: any = search ? {
+      OR: [
+        { name: { contains: search, mode: 'insensitive' } },
+        { login: { contains: search, mode: 'insensitive' } },
+      ],
+    } : {};
+
+    // Для директора показываем только сотрудников его городов
+    if (user?.role === 'director' && user?.cities && user.cities.length > 0) {
+      mastersWhere.cities = { hasSome: user.cities };
+      directorsWhere.cities = { hasSome: user.cities };
+    }
+
+    if (role === 'master') {
+      const [masters, total] = await Promise.all([
+        this.prisma.master.findMany({
+          where: mastersWhere,
+          skip,
+          take,
+          select: {
+            id: true,
+            name: true,
+            login: true,
+            cities: true,
+            statusWork: true,
+            dateCreate: true,
+            note: true,
+          },
+          orderBy: { dateCreate: 'desc' },
+        }),
+        this.prisma.master.count({ where: mastersWhere }),
+      ]);
+
+      return {
+        success: true,
+        data: masters.map(m => ({ ...m, role: 'master' })),
+        total,
+        page: normalizedPage,
+        limit: normalizedLimit,
+        totalPages: Math.ceil(total / normalizedLimit),
+      };
+    }
+
+    if (role === 'director') {
+      const [directors, total] = await Promise.all([
+        this.prisma.director.findMany({
+          where: directorsWhere,
+          skip,
+          take,
+          select: {
+            id: true,
+            name: true,
+            login: true,
+            cities: true,
+            dateCreate: true,
+            note: true,
+          },
+          orderBy: { dateCreate: 'desc' },
+        }),
+        this.prisma.director.count({ where: directorsWhere }),
+      ]);
+
+      return {
+        success: true,
+        data: directors.map(d => ({ ...d, role: 'director' })),
+        total,
+        page: normalizedPage,
+        limit: normalizedLimit,
+        totalPages: Math.ceil(total / normalizedLimit),
+      };
+    }
+
+    // Если роль не указана - получаем обоих
+    const halfLimit = Math.ceil(normalizedLimit / 2);
+    const halfSkip = (normalizedPage - 1) * halfLimit;
+
+    const [masters, directors, mastersCount, directorsCount] = await Promise.all([
+      this.prisma.master.findMany({
+        where: mastersWhere,
+        skip: halfSkip,
+        take: halfLimit,
+        select: {
+          id: true,
+          name: true,
+          login: true,
+          cities: true,
+          statusWork: true,
+          dateCreate: true,
+          note: true,
+        },
+        orderBy: { dateCreate: 'desc' },
+      }),
+      this.prisma.director.findMany({
+        where: directorsWhere,
+        skip: halfSkip,
+        take: halfLimit,
+        select: {
+          id: true,
+          name: true,
+          login: true,
+          cities: true,
+          dateCreate: true,
+          note: true,
+        },
+        orderBy: { dateCreate: 'desc' },
+      }),
+      this.prisma.master.count({ where: mastersWhere }),
+      this.prisma.director.count({ where: directorsWhere }),
+    ]);
+
+    const total = mastersCount + directorsCount;
+
+    return {
+      success: true,
+      data: [
+        ...masters.map(m => ({ ...m, role: 'master' })),
+        ...directors.map(d => ({ ...d, role: 'director' })),
+      ],
+      total,
+      page: normalizedPage,
+      limit: normalizedLimit,
+      totalPages: Math.ceil(total / normalizedLimit),
+    };
+  }
+
+  /**
+   * Обновить документы мастера
+   */
+  async updateDocuments(id: number, body: { contractDoc?: string; passportDoc?: string }) {
+    const master = await this.prisma.master.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!master) {
+      throw new NotFoundException(`Master with ID ${id} not found`);
+    }
+
+    const updated = await this.prisma.master.update({
+      where: { id },
+      data: {
+        ...(body.contractDoc !== undefined && { contractDoc: body.contractDoc }),
+        ...(body.passportDoc !== undefined && { passportDoc: body.passportDoc }),
+      },
+      select: {
+        id: true,
+        name: true,
+        contractDoc: true,
+        passportDoc: true,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Documents updated successfully',
+      data: updated,
+    };
+  }
 }
