@@ -904,7 +904,8 @@ export class MastersService {
   }
 
   /**
-   * Получить всех сотрудников (мастера, директора)
+   * Получить всех сотрудников (только мастера в этом сервисе)
+   * Для директоров используйте /api/v1/employees в users-service
    */
   async getEmployees(query: any, user?: any) {
     const { search, role, page = 1, limit = 50 } = query;
@@ -916,94 +917,36 @@ export class MastersService {
     }
 
     // Формируем условие для фильтрации
-    const mastersWhere: any = search ? {
+    const mastersWhere: Prisma.MasterWhereInput = search ? {
       OR: [
         { name: { contains: search, mode: 'insensitive' } },
         { login: { contains: search, mode: 'insensitive' } },
       ],
     } : {};
 
-    const directorsWhere: any = search ? {
-      OR: [
-        { name: { contains: search, mode: 'insensitive' } },
-        { login: { contains: search, mode: 'insensitive' } },
-      ],
-    } : {};
-
-    // Для директора показываем только сотрудников его городов
+    // Для директора показываем только мастеров его городов
     if (user?.role === 'director' && user?.cities && user.cities.length > 0) {
       mastersWhere.cities = { hasSome: user.cities };
-      directorsWhere.cities = { hasSome: user.cities };
     }
 
-    if (role === 'master') {
-      const [masters, total] = await Promise.all([
-        this.prisma.master.findMany({
-          where: mastersWhere,
-          skip,
-          take,
-          select: {
-            id: true,
-            name: true,
-            login: true,
-            cities: true,
-            statusWork: true,
-            dateCreate: true,
-            note: true,
-          },
-          orderBy: { dateCreate: 'desc' },
-        }),
-        this.prisma.master.count({ where: mastersWhere }),
-      ]);
-
-      return {
-        success: true,
-        data: masters.map(m => ({ ...m, role: 'master' })),
-        total,
-        page: normalizedPage,
-        limit: normalizedLimit,
-        totalPages: Math.ceil(total / normalizedLimit),
-      };
-    }
-
+    // Если запрошены директоры — возвращаем пустой результат (они в users-service)
     if (role === 'director') {
-      const [directors, total] = await Promise.all([
-        this.prisma.director.findMany({
-          where: directorsWhere,
-          skip,
-          take,
-          select: {
-            id: true,
-            name: true,
-            login: true,
-            cities: true,
-            dateCreate: true,
-            note: true,
-          },
-          orderBy: { dateCreate: 'desc' },
-        }),
-        this.prisma.director.count({ where: directorsWhere }),
-      ]);
-
       return {
         success: true,
-        data: directors.map(d => ({ ...d, role: 'director' })),
-        total,
+        data: [],
+        total: 0,
         page: normalizedPage,
         limit: normalizedLimit,
-        totalPages: Math.ceil(total / normalizedLimit),
+        totalPages: 0,
+        message: 'Directors are managed by users-service. Use /api/v1/employees endpoint.',
       };
     }
 
-    // Если роль не указана - получаем обоих
-    const halfLimit = Math.ceil(normalizedLimit / 2);
-    const halfSkip = (normalizedPage - 1) * halfLimit;
-
-    const [masters, directors, mastersCount, directorsCount] = await Promise.all([
+    const [masters, total] = await Promise.all([
       this.prisma.master.findMany({
         where: mastersWhere,
-        skip: halfSkip,
-        take: halfLimit,
+        skip,
+        take,
         select: {
           id: true,
           name: true,
@@ -1015,32 +958,12 @@ export class MastersService {
         },
         orderBy: { dateCreate: 'desc' },
       }),
-      this.prisma.director.findMany({
-        where: directorsWhere,
-        skip: halfSkip,
-        take: halfLimit,
-        select: {
-          id: true,
-          name: true,
-          login: true,
-          cities: true,
-          dateCreate: true,
-          note: true,
-        },
-        orderBy: { dateCreate: 'desc' },
-      }),
       this.prisma.master.count({ where: mastersWhere }),
-      this.prisma.director.count({ where: directorsWhere }),
     ]);
-
-    const total = mastersCount + directorsCount;
 
     return {
       success: true,
-      data: [
-        ...masters.map(m => ({ ...m, role: 'master' })),
-        ...directors.map(d => ({ ...d, role: 'director' })),
-      ],
+      data: masters.map((m: any) => ({ ...m, role: 'master' })),
       total,
       page: normalizedPage,
       limit: normalizedLimit,
