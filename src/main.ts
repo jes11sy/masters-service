@@ -5,18 +5,29 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from '@fastify/helmet';
 import cors from '@fastify/cors';
 import compress from '@fastify/compress';
+import rateLimit from '@fastify/rate-limit';
 import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
 
 const logger = new Logger('Bootstrap');
 
 async function bootstrap() {
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  // ✅ FIX #86: Фильтрация уровней логов в production
+  const logLevels: ('log' | 'error' | 'warn' | 'debug' | 'verbose')[] = isProduction
+    ? ['log', 'error', 'warn']
+    : ['log', 'error', 'warn', 'debug', 'verbose'];
+
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter({ 
-      logger: process.env.NODE_ENV === 'development',
+      logger: !isProduction, // ✅ Fastify logger только в dev
       trustProxy: true,
     }),
+    {
+      logger: logLevels, // ✅ FIX #86: Применяем фильтрацию логов NestJS
+    },
   );
 
   // 🍪 РЕГИСТРАЦИЯ COOKIE PLUGIN (до CORS!)
@@ -24,6 +35,28 @@ async function bootstrap() {
     secret: process.env.COOKIE_SECRET || process.env.JWT_SECRET,
   });
   logger.log('✅ Cookie plugin registered');
+
+  // 🛡️ RATE LIMITING - защита от DDoS и brute-force
+  await app.register(rateLimit, {
+    max: 100, // максимум 100 запросов
+    timeWindow: '1 minute', // за 1 минуту
+    errorResponseBuilder: () => ({
+      statusCode: 429,
+      error: 'Too Many Requests',
+      message: 'Rate limit exceeded. Please try again later.',
+    }),
+    // Кастомный key generator для учёта IP за прокси
+    keyGenerator: (request) => {
+      return request.headers['x-forwarded-for']?.toString().split(',')[0] 
+        || request.ip 
+        || 'unknown';
+    },
+    // Пропускаем health check
+    allowList: (request) => {
+      return request.url === '/api/v1/masters/health' || request.url === '/metrics';
+    },
+  });
+  logger.log('✅ Rate limiting enabled: 100 req/min');
 
   // CORS - строгая конфигурация
   const corsOrigins = process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000'];

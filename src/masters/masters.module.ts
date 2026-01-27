@@ -7,6 +7,7 @@ import { PrismaModule } from '../prisma/prisma.module';
   imports: [PrismaModule],
   controllers: [MastersController],
   providers: [MastersService],
+  exports: [MastersService], // Экспортируем для MasterHandoverController
 })
 export class MastersModule {}
 

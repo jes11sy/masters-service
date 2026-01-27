@@ -5,7 +5,6 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { MastersModule } from './masters/masters.module';
 import { MasterHandoverController } from './master-handover/master-handover.controller';
-import { MastersService } from './masters/masters.service';
 
 @Module({
   imports: [
@@ -21,7 +20,7 @@ import { MastersService } from './masters/masters.service';
     MastersModule,
   ],
   controllers: [MasterHandoverController],
-  providers: [MastersService],
+  // MastersService НЕ дублируется - он экспортируется из MastersModule
 })
 export class AppModule {}
 

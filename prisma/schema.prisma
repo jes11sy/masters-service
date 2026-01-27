@@ -26,11 +26,12 @@ model Master {
   orders    Order[]
   schedules MasterSchedule[]
 
-  // Индексы для производительности
-  @@index([login]) // Для быстрого поиска по логину
-  @@index([statusWork, dateCreate]) // Для фильтрации и сортировки
-  @@index([statusWork]) // Для быстрой фильтрации по статусу
-  @@index([cities]) // GIN индекс для поиска по массиву городов (PostgreSQL)
+  // ✅ FIX #167: Оптимизированные индексы (удалены дубликаты)
+  // REMOVED: @@index([login]) — @unique уже создаёт индекс автоматически
+  @@index([statusWork, dateCreate]) // Для фильтрации и сортировки (покрывает statusWork-only)
+  // REMOVED: @@index([statusWork]) — дубликат, покрыт [statusWork, dateCreate]
+  // ✅ FIX #164: GIN индекс для поиска по массиву городов (PostgreSQL)
+  @@index([cities], type: Gin)
   @@map("master")
 }
 
@@ -87,7 +88,8 @@ model Order {
   cashReceiptDoc       String?   @map("cash_receipt_doc")
   cashApprovedBy       Int?      @map("cash_approved_by")
   cashApprovedDate     DateTime? @map("cash_approved_date")
-  master               Master?   @relation(fields: [masterId], references: [id])
+  // ✅ FIX #146: SetNull - заказ остаётся, мастер открепляется
+  master               Master?   @relation(fields: [masterId], references: [id], onDelete: SetNull)
   
   // Существующие индексы
   @@index([statusOrder, city])
@@ -99,12 +101,12 @@ model Order {
   @@index([createDate])
   @@index([avitoName])
   
-  // Дополнительные индексы для производительности
-  @@index([masterId, statusOrder]) // Для быстрой фильтрации заказов мастера по статусу
+  // ✅ FIX #167: Оптимизированные индексы (удалены дубликаты)
+  @@index([masterId, statusOrder]) // Покрывает masterId-only запросы (leftmost prefix)
   @@index([masterId, createDate]) // Для статистики по датам
   @@index([statusOrder, cashSubmissionStatus]) // Для getHandoverSummary
-  @@index([cashSubmissionStatus, statusOrder]) // Альтернативный порядок
-  @@index([masterId]) // Для быстрого поиска всех заказов мастера
+  // REMOVED: @@index([cashSubmissionStatus, statusOrder]) — альтернативный порядок редко нужен
+  // REMOVED: @@index([masterId]) — дубликат, покрыт [masterId, statusOrder]
   
   @@map("orders")
 }

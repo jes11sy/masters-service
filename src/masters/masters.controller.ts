@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, HttpCode, HttpStatus, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, HttpCode, HttpStatus, Request, ParseIntPipe, DefaultValuePipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { CookieJwtAuthGuard } from '../auth/guards/cookie-jwt-auth.guard';
 import { MastersService } from './masters.service';
@@ -13,6 +13,8 @@ import { RolesGuard, Roles, UserRole } from '../auth/roles.guard';
 export class MastersController {
   constructor(private mastersService: MastersService) {}
 
+  // ==================== СТАТИЧЕСКИЕ МАРШРУТЫ (ДОЛЖНЫ БЫТЬ ПЕРВЫМИ!) ====================
+
   @Get('health')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Health check endpoint' })
@@ -24,84 +26,6 @@ export class MastersController {
     };
   }
 
-  @Get()
-  @UseGuards(CookieJwtAuthGuard, RolesGuard)
-  @ApiBearerAuth()
-  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN)
-  @ApiOperation({ summary: 'Get all masters' })
-  @ApiQuery({ name: 'city', required: false, type: String })
-  @ApiQuery({ name: 'status', required: false, type: String })
-  async findAll(
-    @Query('city') city?: string,
-    @Query('status') status?: string,
-    @Request() req?: any,
-  ) {
-    return this.mastersService.findAll(city, status, req.user);
-  }
-
-  @Get(':id')
-  @UseGuards(CookieJwtAuthGuard, RolesGuard)
-  @ApiBearerAuth()
-  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN)
-  @ApiOperation({ summary: 'Get master by ID' })
-  async findOne(@Param('id') id: string) {
-    return this.mastersService.findOne(+id);
-  }
-
-  @Post()
-  @UseGuards(CookieJwtAuthGuard, RolesGuard)
-  @ApiBearerAuth()
-  @Roles(UserRole.DIRECTOR)
-  @ApiOperation({ summary: 'Create new master' })
-  async create(@Body() createMasterDto: CreateMasterDto) {
-    return this.mastersService.create(createMasterDto);
-  }
-
-  @Put(':id')
-  @UseGuards(CookieJwtAuthGuard, RolesGuard)
-  @ApiBearerAuth()
-  @Roles(UserRole.DIRECTOR)
-  @ApiOperation({ summary: 'Update master' })
-  async update(
-    @Param('id') id: string,
-    @Body() updateMasterDto: UpdateMasterDto,
-  ) {
-    return this.mastersService.update(+id, updateMasterDto);
-  }
-
-  @Delete(':id')
-  @UseGuards(CookieJwtAuthGuard, RolesGuard)
-  @ApiBearerAuth()
-  @Roles(UserRole.DIRECTOR)
-  @ApiOperation({ summary: 'Delete master' })
-  async remove(@Param('id') id: string) {
-    return this.mastersService.remove(+id);
-  }
-
-  @Get(':id/orders')
-  @UseGuards(CookieJwtAuthGuard, RolesGuard)
-  @ApiBearerAuth()
-  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN, UserRole.MASTER)
-  @ApiOperation({ summary: 'Get master orders statistics' })
-  @ApiQuery({ name: 'startDate', required: false, type: String })
-  @ApiQuery({ name: 'endDate', required: false, type: String })
-  async getOrdersStats(
-    @Param('id') id: string,
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
-  ) {
-    return this.mastersService.getOrdersStats(+id, startDate, endDate);
-  }
-
-  @Get('city/:city')
-  @UseGuards(CookieJwtAuthGuard, RolesGuard)
-  @ApiBearerAuth()
-  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN)
-  @ApiOperation({ summary: 'Get masters by city' })
-  async findByCity(@Param('city') city: string) {
-    return this.mastersService.findByCity(city);
-  }
-
   @Get('profile')
   @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
@@ -109,53 +33,6 @@ export class MastersController {
   @ApiOperation({ summary: 'Get master profile' })
   async getProfile(@Request() req: any) {
     return this.mastersService.getProfile(req.user);
-  }
-
-  @Put(':id/status')
-  @UseGuards(CookieJwtAuthGuard, RolesGuard)
-  @ApiBearerAuth()
-  @Roles(UserRole.DIRECTOR)
-  @ApiOperation({ summary: 'Update master status' })
-  async updateStatus(
-    @Param('id') id: string,
-    @Body() updateStatusDto: UpdateStatusDto,
-  ) {
-    return this.mastersService.updateStatus(+id, updateStatusDto.status);
-  }
-
-  @Get('handover/summary')
-  @UseGuards(CookieJwtAuthGuard, RolesGuard)
-  @ApiBearerAuth()
-  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN)
-  @ApiOperation({ summary: 'Get master handover summary' })
-  async getHandoverSummary(@Request() req: any) {
-    return this.mastersService.getHandoverSummary(req.user);
-  }
-
-  @Get('handover/:id')
-  @UseGuards(CookieJwtAuthGuard, RolesGuard)
-  @ApiBearerAuth()
-  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN)
-  @ApiOperation({ summary: 'Get master handover details' })
-  async getHandoverDetails(@Param('id') id: string) {
-    return this.mastersService.getHandoverDetails(+id);
-  }
-
-  // ==================== SCHEDULE ENDPOINTS ====================
-
-  @Get('schedules')
-  @UseGuards(CookieJwtAuthGuard, RolesGuard)
-  @ApiBearerAuth()
-  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN)
-  @ApiOperation({ summary: 'Get all masters schedules for period (filtered by director cities)' })
-  @ApiQuery({ name: 'startDate', required: true, type: String, description: 'YYYY-MM-DD' })
-  @ApiQuery({ name: 'endDate', required: true, type: String, description: 'YYYY-MM-DD' })
-  async getAllSchedules(
-    @Request() req: any,
-    @Query('startDate') startDate: string,
-    @Query('endDate') endDate: string,
-  ) {
-    return this.mastersService.getAllSchedules(req.user, startDate, endDate);
   }
 
   @Get('profile/schedule')
@@ -185,6 +62,139 @@ export class MastersController {
     return this.mastersService.updateOwnSchedule(req.user, updateScheduleDto.days);
   }
 
+  @Get('schedules')
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN)
+  @ApiOperation({ summary: 'Get all masters schedules for period (filtered by director cities)' })
+  @ApiQuery({ name: 'startDate', required: true, type: String, description: 'YYYY-MM-DD' })
+  @ApiQuery({ name: 'endDate', required: true, type: String, description: 'YYYY-MM-DD' })
+  async getAllSchedules(
+    @Request() req: any,
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
+  ) {
+    return this.mastersService.getAllSchedules(req.user, startDate, endDate);
+  }
+
+  @Get('handover/summary')
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN)
+  @ApiOperation({ summary: 'Get master handover summary' })
+  async getHandoverSummary(@Request() req: any) {
+    return this.mastersService.getHandoverSummary(req.user);
+  }
+
+  @Get('handover/:id')
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN)
+  @ApiOperation({ summary: 'Get master handover details' })
+  async getHandoverDetails(@Param('id', ParseIntPipe) id: number) {
+    return this.mastersService.getHandoverDetails(id);
+  }
+
+  @Get('city/:city')
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN)
+  @ApiOperation({ summary: 'Get masters by city' })
+  async findByCity(@Param('city') city: string) {
+    return this.mastersService.findByCity(city);
+  }
+
+  // ==================== CRUD С ПАГИНАЦИЕЙ ====================
+
+  @Get()
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN)
+  @ApiOperation({ summary: 'Get all masters with pagination' })
+  @ApiQuery({ name: 'city', required: false, type: String })
+  @ApiQuery({ name: 'status', required: false, type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 50, max: 200)' })
+  async findAll(
+    @Query('city') city?: string,
+    @Query('status') status?: string,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
+    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit?: number,
+    @Request() req?: any,
+  ) {
+    return this.mastersService.findAll(city, status, req.user, page, limit);
+  }
+
+  @Post()
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.DIRECTOR)
+  @ApiOperation({ summary: 'Create new master' })
+  async create(@Body() createMasterDto: CreateMasterDto) {
+    return this.mastersService.create(createMasterDto);
+  }
+
+  // ==================== ДИНАМИЧЕСКИЕ МАРШРУТЫ (ПОСЛЕ СТАТИЧЕСКИХ!) ====================
+
+  @Get(':id')
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN)
+  @ApiOperation({ summary: 'Get master by ID' })
+  async findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.mastersService.findOne(id);
+  }
+
+  @Put(':id')
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.DIRECTOR)
+  @ApiOperation({ summary: 'Update master' })
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateMasterDto: UpdateMasterDto,
+    @Request() req: any,
+  ) {
+    return this.mastersService.update(id, updateMasterDto, req.user);
+  }
+
+  @Delete(':id')
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.DIRECTOR)
+  @ApiOperation({ summary: 'Delete master' })
+  async remove(@Param('id', ParseIntPipe) id: number) {
+    return this.mastersService.remove(id);
+  }
+
+  @Get(':id/orders')
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.DIRECTOR, UserRole.ADMIN, UserRole.CALLCENTRE_ADMIN, UserRole.MASTER)
+  @ApiOperation({ summary: 'Get master orders statistics' })
+  @ApiQuery({ name: 'startDate', required: false, type: String })
+  @ApiQuery({ name: 'endDate', required: false, type: String })
+  async getOrdersStats(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.mastersService.getOrdersStats(id, startDate, endDate);
+  }
+
+  @Put(':id/status')
+  @UseGuards(CookieJwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(UserRole.DIRECTOR)
+  @ApiOperation({ summary: 'Update master status' })
+  async updateStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateStatusDto: UpdateStatusDto,
+    @Request() req: any,
+  ) {
+    return this.mastersService.updateStatus(id, updateStatusDto.status, req.user);
+  }
+
   @Get(':id/schedule')
   @UseGuards(CookieJwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
@@ -193,11 +203,11 @@ export class MastersController {
   @ApiQuery({ name: 'startDate', required: false, type: String, description: 'YYYY-MM-DD' })
   @ApiQuery({ name: 'endDate', required: false, type: String, description: 'YYYY-MM-DD' })
   async getSchedule(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    return this.mastersService.getSchedule(+id, startDate, endDate);
+    return this.mastersService.getSchedule(id, startDate, endDate);
   }
 
   @Post(':id/schedule')
@@ -206,10 +216,9 @@ export class MastersController {
   @Roles(UserRole.DIRECTOR, UserRole.ADMIN)
   @ApiOperation({ summary: 'Update master schedule by ID' })
   async updateSchedule(
-    @Param('id') id: string,
+    @Param('id', ParseIntPipe) id: number,
     @Body() updateScheduleDto: UpdateScheduleDto,
   ) {
-    return this.mastersService.updateSchedule(+id, updateScheduleDto.days);
+    return this.mastersService.updateSchedule(id, updateScheduleDto.days);
   }
 }
-

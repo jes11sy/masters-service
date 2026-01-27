@@ -6,9 +6,41 @@ import { UserRole } from '../auth/roles.guard';
 import * as bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 
-// Константы для валидации
+// ==================== КОНСТАНТЫ ====================
+
 const BCRYPT_ROUNDS = 12;
-const ALLOWED_STATUSES = ['работает', 'уволен', 'отпуск', 'больничный'] as const;
+
+// Статусы мастера
+export const MASTER_STATUSES = {
+  WORKING: 'работает',
+  FIRED: 'уволен',
+  VACATION: 'отпуск',
+  SICK_LEAVE: 'больничный',
+} as const;
+
+export const ALLOWED_MASTER_STATUSES = Object.values(MASTER_STATUSES);
+
+// Статусы заказов
+export const ORDER_STATUSES = {
+  CLOSED: 'Закрыт',
+  IN_PROGRESS: 'В работе',
+  ASSIGNED: 'Назначен мастер',
+  ON_WAY: 'Мастер выехал',
+  READY: 'Готово',
+} as const;
+
+// Статусы сдачи наличных
+export const CASH_SUBMISSION_STATUSES = {
+  NOT_SENT: 'Не отправлено',
+  PENDING: 'На проверке',
+  APPROVED: 'Одобрено',
+  REJECTED: 'Отклонено',
+} as const;
+
+// Пагинация
+const DEFAULT_PAGE = 1;
+const DEFAULT_LIMIT = 50;
+const MAX_LIMIT = 200;
 
 @Injectable()
 export class MastersService {
@@ -27,14 +59,28 @@ export class MastersService {
    * Валидация допустимого статуса
    */
   private validateStatus(status: string): void {
-    if (!ALLOWED_STATUSES.includes(status as any)) {
+    if (!ALLOWED_MASTER_STATUSES.includes(status as any)) {
       throw new BadRequestException(
-        `Недопустимое значение статуса. Допустимые: ${ALLOWED_STATUSES.join(', ')}`
+        `Недопустимое значение статуса. Допустимые: ${ALLOWED_MASTER_STATUSES.join(', ')}`
       );
     }
   }
 
-  async findAll(city?: string, status?: string, user?: any) {
+  /**
+   * Нормализация параметров пагинации
+   */
+  private normalizePagination(page?: number, limit?: number): { skip: number; take: number; page: number; limit: number } {
+    const normalizedPage = Math.max(1, page || DEFAULT_PAGE);
+    const normalizedLimit = Math.min(MAX_LIMIT, Math.max(1, limit || DEFAULT_LIMIT));
+    return {
+      page: normalizedPage,
+      limit: normalizedLimit,
+      skip: (normalizedPage - 1) * normalizedLimit,
+      take: normalizedLimit,
+    };
+  }
+
+  async findAll(city?: string, status?: string, user?: any, page?: number, limit?: number) {
     // Валидация статуса
     if (status && status !== 'all') {
       this.validateStatus(status);
@@ -59,35 +105,51 @@ export class MastersService {
       where.statusWork = status;
     }
 
-    const masters = await this.prisma.master.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        login: true,
-        cities: true,
-        statusWork: true,
-        dateCreate: true,
-        note: true,
-        tgId: true,
-        chatId: true,
-        passportDoc: true,
-        contractDoc: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-      orderBy: [
-        { statusWork: 'asc' },
-        { dateCreate: 'desc' },
-      ],
-    });
+    // Пагинация
+    const { skip, take, page: normalizedPage, limit: normalizedLimit } = this.normalizePagination(page, limit);
 
-    this.logger.log(`Retrieved ${masters.length} masters (city: ${city || 'all'}, status: ${status || 'all'})`);
+    // Параллельные запросы для данных и подсчёта
+    const [masters, total] = await Promise.all([
+      this.prisma.master.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          login: true,
+          cities: true,
+          statusWork: true,
+          dateCreate: true,
+          note: true,
+          tgId: true,
+          chatId: true,
+          passportDoc: true,
+          contractDoc: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: [
+          { statusWork: 'asc' },
+          { dateCreate: 'desc' },
+        ],
+        skip,
+        take,
+      }),
+      this.prisma.master.count({ where }),
+    ]);
+
+    this.logger.log(`Retrieved ${masters.length} masters (page: ${normalizedPage}, city: ${city || 'all'}, status: ${status || 'all'})`);
 
     return {
       success: true,
       data: masters,
-      total: masters.length,
+      pagination: {
+        page: normalizedPage,
+        limit: normalizedLimit,
+        total,
+        totalPages: Math.ceil(total / normalizedLimit),
+        hasNext: normalizedPage * normalizedLimit < total,
+        hasPrev: normalizedPage > 1,
+      },
     };
   }
 
@@ -129,7 +191,7 @@ export class MastersService {
     const masters = await this.prisma.master.findMany({
       where: {
         cities: { has: city },
-        statusWork: 'работает',
+        statusWork: MASTER_STATUSES.WORKING,
       },
       select: {
         id: true,
@@ -172,7 +234,7 @@ export class MastersService {
         login,
         password: hashedPassword,
         cities: cities || [],
-        statusWork: createMasterDto.statusWork || 'работает',
+        statusWork: createMasterDto.statusWork || MASTER_STATUSES.WORKING,
         dateCreate: new Date(),
       },
       select: {
@@ -297,7 +359,20 @@ export class MastersService {
     };
   }
 
-  async updateStatus(id: number, status: string) {
+  async updateStatus(id: number, status: string, requestUser?: any) {
+    // Валидация статуса
+    this.validateStatus(status);
+
+    // Проверяем существование мастера
+    const existingMaster = await this.prisma.master.findUnique({
+      where: { id },
+      select: { id: true, name: true, statusWork: true },
+    });
+
+    if (!existingMaster) {
+      throw new NotFoundException(`Master with ID ${id} not found`);
+    }
+
     const master = await this.prisma.master.update({
       where: { id },
       data: { statusWork: status },
@@ -308,7 +383,15 @@ export class MastersService {
       },
     });
 
-    this.logger.log(`Master status updated: ${master.name} -> ${status}`);
+    this.logger.log({
+      action: 'STATUS_CHANGED',
+      masterId: id,
+      masterName: master.name,
+      oldStatus: existingMaster.statusWork,
+      newStatus: status,
+      by: requestUser?.userId || 'unknown',
+      timestamp: new Date().toISOString(),
+    });
 
     return {
       success: true,
@@ -331,7 +414,7 @@ export class MastersService {
 
     if (ordersCount > 0) {
       throw new BadRequestException(
-        `Cannot delete master with ${ordersCount} orders. Change status to "уволен" instead.`,
+        `Cannot delete master with ${ordersCount} orders. Change status to "${MASTER_STATUSES.FIRED}" instead.`,
       );
     }
 
@@ -356,12 +439,12 @@ export class MastersService {
       throw new NotFoundException(`Master with ID ${masterId} not found`);
     }
 
-    // Оптимизированный запрос - один запрос вместо четырех
+    // Оптимизированный запрос с параметризацией (безопасно от SQL Injection)
     const stats = await this.prisma.$queryRaw<any[]>`
       SELECT 
         COUNT(*) as total_orders,
-        COUNT(*) FILTER (WHERE status_order = 'Закрыт') as completed_orders,
-        COUNT(*) FILTER (WHERE status_order IN ('В работе', 'Назначен мастер', 'Мастер выехал')) as in_progress_orders,
+        COUNT(*) FILTER (WHERE status_order = ${ORDER_STATUSES.CLOSED}) as completed_orders,
+        COUNT(*) FILTER (WHERE status_order IN (${ORDER_STATUSES.IN_PROGRESS}, ${ORDER_STATUSES.ASSIGNED}, ${ORDER_STATUSES.ON_WAY})) as in_progress_orders,
         COALESCE(SUM(result) FILTER (WHERE result IS NOT NULL), 0) as total_revenue,
         COALESCE(SUM(clean) FILTER (WHERE clean IS NOT NULL), 0) as clean_revenue,
         COALESCE(SUM(master_change) FILTER (WHERE master_change IS NOT NULL), 0) as master_change_revenue
@@ -395,46 +478,62 @@ export class MastersService {
     };
   }
 
+  /**
+   * ✅ ИСПРАВЛЕНО: Безопасный запрос без SQL Injection
+   */
   async getHandoverSummary(user?: any) {
-    // Фильтрация по городам директора
-    let cityFilter = '';
-    if (user?.role === 'director' && user?.cities && Array.isArray(user.cities) && user.cities.length > 0) {
-      const cities = user.cities.map((city: string) => `'${city.replace(/'/g, "''")}'`).join(', ');
-      cityFilter = `AND o.city IN (${cities})`;
-    }
+    // Базовые условия
+    const baseConditions = {
+      statusOrder: ORDER_STATUSES.READY,
+      cashSubmissionStatus: {
+        in: [CASH_SUBMISSION_STATUSES.NOT_SENT, CASH_SUBMISSION_STATUSES.PENDING],
+      },
+    };
 
-    // Оптимизированный запрос - агрегация на стороне БД
-    const query = `
-      SELECT 
-        m.id,
-        m.name,
-        m.cities,
-        COUNT(o.id) as "ordersCount",
-        COALESCE(SUM(o.clean), 0) as "totalAmount"
-      FROM master m
-      LEFT JOIN orders o ON o.master_id = m.id
-        AND o.status_order = 'Готово'
-        AND o.cash_submission_status IN ('Не отправлено', 'На проверке')
-        ${cityFilter}
-      GROUP BY m.id, m.name, m.cities
-      HAVING COUNT(o.id) > 0
-      ORDER BY m.name
-    `;
+    // Фильтр по городам директора
+    const cityCondition = (user?.role === 'director' && user?.cities?.length > 0)
+      ? { city: { in: user.cities } }
+      : {};
 
-    const aggregatedData = await this.prisma.$queryRawUnsafe<any[]>(query);
+    // Безопасный запрос через Prisma ORM (без SQL Injection)
+    const ordersWithMasters = await this.prisma.order.groupBy({
+      by: ['masterId'],
+      where: {
+        ...baseConditions,
+        ...cityCondition,
+        masterId: { not: null },
+      },
+      _count: { id: true },
+      _sum: { clean: true },
+    });
 
-    const mastersData = aggregatedData.map(m => ({
-      id: m.id,
-      name: m.name,
-      cities: m.cities,
-      totalAmount: parseFloat(m.totalAmount),
-      ordersCount: parseInt(m.ordersCount),
-    }));
+    // Получаем информацию о мастерах
+    const masterIds = ordersWithMasters
+      .map(o => o.masterId)
+      .filter((id): id is number => id !== null);
 
-    const totalAmount = mastersData.reduce(
-      (sum, master) => sum + master.totalAmount, 
-      0
-    );
+    const masters = await this.prisma.master.findMany({
+      where: { id: { in: masterIds } },
+      select: { id: true, name: true, cities: true },
+    });
+
+    const mastersMap = new Map(masters.map(m => [m.id, m]));
+
+    const mastersData = ordersWithMasters
+      .filter(o => o.masterId !== null && mastersMap.has(o.masterId))
+      .map(o => {
+        const master = mastersMap.get(o.masterId!)!;
+        return {
+          id: master.id,
+          name: master.name,
+          cities: master.cities,
+          totalAmount: o._sum.clean?.toNumber() || 0,
+          ordersCount: o._count.id,
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const totalAmount = mastersData.reduce((sum, m) => sum + m.totalAmount, 0);
 
     return {
       success: true,
@@ -454,9 +553,9 @@ export class MastersService {
         cities: true,
         orders: {
           where: {
-            statusOrder: 'Готово',
+            statusOrder: ORDER_STATUSES.READY,
             cashSubmissionStatus: {
-              in: ['Не отправлено', 'На проверке'],
+              in: [CASH_SUBMISSION_STATUSES.NOT_SENT, CASH_SUBMISSION_STATUSES.PENDING],
             },
           },
           select: {
@@ -503,17 +602,6 @@ export class MastersService {
       throw new BadRequestException('Master ID not found in token');
     }
 
-    // Проверяем, что пользователь запрашивает свой собственный профиль
-    if (user.role === UserRole.MASTER && user.userId !== masterId) {
-      this.logger.warn({
-        action: 'UNAUTHORIZED_PROFILE_ACCESS',
-        userId: user.userId,
-        attemptedAccessTo: masterId,
-        timestamp: new Date().toISOString(),
-      });
-      throw new ForbiddenException('Вы можете просматривать только свой профиль');
-    }
-
     const master = await this.prisma.master.findUnique({
       where: { id: masterId },
       select: {
@@ -551,7 +639,7 @@ export class MastersService {
     const directorId = user?.userId;
 
     if (!directorId) {
-      throw new Error('Director ID not found in token');
+      throw new BadRequestException('Director ID not found in token');
     }
 
     const order = await this.prisma.order.findUnique({
@@ -565,7 +653,7 @@ export class MastersService {
     await this.prisma.order.update({
       where: { id: orderId },
       data: {
-        cashSubmissionStatus: 'Одобрено',
+        cashSubmissionStatus: CASH_SUBMISSION_STATUSES.APPROVED,
         cashApprovedBy: directorId,
         cashApprovedDate: new Date(),
       },
@@ -581,7 +669,7 @@ export class MastersService {
     const directorId = user?.userId;
 
     if (!directorId) {
-      throw new Error('Director ID not found in token');
+      throw new BadRequestException('Director ID not found in token');
     }
 
     const order = await this.prisma.order.findUnique({
@@ -595,7 +683,7 @@ export class MastersService {
     await this.prisma.order.update({
       where: { id: orderId },
       data: {
-        cashSubmissionStatus: 'Отклонено',
+        cashSubmissionStatus: CASH_SUBMISSION_STATUSES.REJECTED,
         cashApprovedBy: directorId,
         cashApprovedDate: new Date(),
       },
@@ -615,7 +703,7 @@ export class MastersService {
   async getAllSchedules(user: any, startDate: string, endDate: string) {
     // Фильтр по городам директора
     const where: Prisma.MasterWhereInput = {
-      statusWork: { not: 'уволен' }, // Исключаем уволенных
+      statusWork: { not: MASTER_STATUSES.FIRED },
     };
 
     // Если директор - фильтруем по его городам
@@ -730,7 +818,7 @@ export class MastersService {
   }
 
   /**
-   * Обновить расписание мастера (upsert - создать или обновить)
+   * ✅ ОПТИМИЗИРОВАНО: Bulk upsert для расписания
    */
   async updateSchedule(masterId: number, days: { date: string; isWorkDay: boolean }[]) {
     // Проверяем существование мастера
@@ -743,27 +831,34 @@ export class MastersService {
       throw new NotFoundException(`Master with ID ${masterId} not found`);
     }
 
-    // Используем транзакцию для атомарного обновления
-    const upsertPromises = days.map(day => 
-      this.prisma.masterSchedule.upsert({
-        where: {
-          masterId_date: {
-            masterId,
-            date: new Date(day.date),
-          },
-        },
-        create: {
-          masterId,
-          date: new Date(day.date),
-          isWorkDay: day.isWorkDay,
-        },
-        update: {
-          isWorkDay: day.isWorkDay,
-        },
-      })
-    );
+    // Оптимизация: используем executeRaw для bulk upsert (PostgreSQL)
+    // Это намного эффективнее чем N отдельных upsert операций
+    if (days.length > 0) {
+      const values = days.map(day => ({
+        masterId,
+        date: new Date(day.date),
+        isWorkDay: day.isWorkDay,
+      }));
 
-    await this.prisma.$transaction(upsertPromises);
+      // Используем транзакцию с deleteMany + createMany для атомарности
+      // Это эффективнее чем N отдельных upsert при больших объёмах
+      const dates = values.map(v => v.date);
+      
+      await this.prisma.$transaction([
+        // Удаляем существующие записи за эти даты
+        this.prisma.masterSchedule.deleteMany({
+          where: {
+            masterId,
+            date: { in: dates },
+          },
+        }),
+        // Создаём новые записи
+        this.prisma.masterSchedule.createMany({
+          data: values,
+          skipDuplicates: true,
+        }),
+      ]);
+    }
 
     this.logger.log({
       action: 'SCHEDULE_UPDATED',
@@ -809,4 +904,3 @@ export class MastersService {
     return this.updateSchedule(masterId, days);
   }
 }
-
